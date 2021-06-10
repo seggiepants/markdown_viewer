@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import scrolledtext
 from tkinter import filedialog
 from tkinter.font import Font
 
@@ -9,15 +10,28 @@ patterns = {
     , ("h1", R"^# .+$", lambda s: s[2:])
     , ("h2", R"^.+\n-+$", lambda s: s.splitlines()[0])
     , ("h2", R"^## .+$", lambda s: s[3:])
+    , ("h3", R"^### .+$", lambda s: s[4:])
+    , ("strike", R"~~.+~~", lambda s: s[2:-2])
+    , ("bold", R"\*\*.+\*\*", lambda s: s[2:-2])
+    , ("italic", R"_.+_", lambda s: s[1:-1])
+    , ("italic", R"\*.+\*", lambda s: s[1:-1])
+    , ("monospace", R"`.+`", lambda s: s[1:-1])
+    #, ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
     }
 
 class Application(tk.Frame):    
     def __init__(self, root=None):
         super().__init__(root)
         self.root = root
+        self.fontText = Font(family='Helvetica')
         self.fontH1 = Font(family='Helvetica', size=36, weight='bold')
         self.fontH2 = Font(family='Helvetica', size=21, weight='bold')
-        self.create_widgets()
+        self.fontH3 = Font(family='Helvetica', size=18, weight='bold')
+        self.fontStrike = Font(family='Helvetica', overstrike=1)
+        self.fontBold = Font(family='Helvetica', weight='bold')
+        self.fontItalic = Font(family='Helvetica', slant='italic')
+        self.fontMonospace = Font(family='Courier')
+        self.create_widgets()        
 
     def create_widgets(self):
         menu = tk.Menu(self.root)        
@@ -39,20 +53,9 @@ class Application(tk.Frame):
         self.quit = tk.Button(self.root, text='QUIT', fg='red', command=self.command_exit)
         self.quit.pack(side='bottom')
         """
-        self.text = tk.Text(self.root)
-        self.vscroll = tk.Scrollbar(self.text, command=self.text.yview, orient=tk.VERTICAL)
-        self.text.yscrollcommand = self.vscroll.set
-        # self.scrollbar.grid(sticky = tk.N + tk.E + tk.S)
-
-        # To make the textarea auto resizable
-        #self.root.grid_rowconfigure(0, weight=1)
-        #self.root.grid_columnconfigure(0, weight=1)
-        #self.text.grid(sticky = tk.N + tk.E + tk.S + tk.W)
-
-        self.vscroll.pack(side="right", fill="y")
+        self.text = scrolledtext.ScrolledText(self.root, font=self.fontText, wrap = tk.WORD)
         self.text.pack(side="left", fill="both", expand=True)
         
-        # self.text.pack()
         self.root.geometry('640x480')
         self.root.minsize(width=320, height=240)
         self.root.config(menu=menu)
@@ -93,26 +96,22 @@ class Application(tk.Frame):
                     
                     middle = fnFormat(textBuffer[indexStart:indexEnd])
                     if len(middle) > 0:
-                        newTokens.append((tagName, ''))
-                        newTokens.append(('text', middle))
-                        newTokens.append(('/' + tagName, ''))
+                        if tagName == 'img':
+                            pass #special processing for an image
+                        else:
+                            newTokens.append((tagName, ''))
+                            newTokens.append(('text', middle))
+                            newTokens.append(('/' + tagName, ''))
                     
                     end = textBuffer[indexEnd:]
                     if len(end) > 0:
                         newTokens.append(('text', end))
                     tokens = tokens[:index] + newTokens + tokens[index:]                
                     tokens.pop(index + len(newTokens))
-                else:
-                    #print(f"{indexStart} -> {indexEnd} : {match.start()} -> {match.end()}")
-                    #tagName = f"Tag{tagCount}"
-                    #self.text.tag_add(tagName, indexStart, indexEnd)
-                    #self.text.tag_config(tagName, font=self.fontH1)
-                    #tagCount = tagCount + 1
-                    #start = start + match.end()
-                    #match = re.search(pattern, buffer[start:], re.MULTILINE)
-                    #print(match)
+                else:                    
                     index += 1
-        
+        print(tokens)
+        self.text['state'] = 'normal'
         self.text.delete('1.0', tk.END)
         # self.text.insert(tk.INSERT, fileText)
         tags = []
@@ -129,6 +128,12 @@ class Application(tk.Frame):
                     tags.append(tokenType)
         self.text.tag_config('h1', font=self.fontH1)
         self.text.tag_config('h2', font=self.fontH2)
+        self.text.tag_config('h3', font=self.fontH3)
+        self.text.tag_config('strike', font=self.fontStrike)
+        self.text.tag_config('bold', font=self.fontBold)
+        self.text.tag_config('italic', font=self.fontItalic)
+        self.text.tag_config('monospace', font=self.fontMonospace)
+        self.text['state'] = 'disabled'
         
     def convert_index(self, string, count):
         lines = string.splitlines()
