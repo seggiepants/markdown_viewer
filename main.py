@@ -3,11 +3,14 @@ import tkinter as tk
 from tkinter import scrolledtext
 from tkinter import filedialog
 from tkinter.font import Font
-
+import urllib.request
+import base64
 import re
 
 patterns = {
-    ("h1", R"^.+\n=+$", lambda s: s.splitlines()[0])
+    ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
+    , ("a", R"\[(?P<title>.+)\]\((?P<url>[^\"\)]+)\)", lambda s: s)
+    , ("h1", R"^.+\n=+$", lambda s: s.splitlines()[0])
     , ("h1", R"^# .+$", lambda s: s[2:])
     , ("h2", R"^.+\n-+$", lambda s: s.splitlines()[0])
     , ("h2", R"^## .+$", lambda s: s[3:])
@@ -17,9 +20,8 @@ patterns = {
     , ("italic", R"_.+_", lambda s: s[1:-1])
     , ("italic", R"\*.+\*", lambda s: s[1:-1])
     , ("monospace", R"`.+`", lambda s: s[1:-1])
-    , ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
-    , ("a", R"\[(?P<title>.+)\]\((?P<url>[^\"\)]+)\)", lambda s: s)
     }
+# ZZZ can I have a link like <url>?
 
 class Application(tk.Frame):    
     def __init__(self, root=None):
@@ -44,7 +46,7 @@ class Application(tk.Frame):
         menu_file.add_command(label='Exit', command=self.command_exit)
         menu.add_cascade(label='File', menu=menu_file)
         menu_help = tk.Menu(menu, tearoff=0)
-        menu_help_about = menu_help.add_command(label='About', command=self.command_about)
+        menu_help.add_command(label='About', command=self.command_about)
         menu.add_cascade(label='Help', menu=menu_help)
 
         """
@@ -85,49 +87,52 @@ class Application(tk.Frame):
             fnFormat = patternRow[2]            
             index = 0
             while index < len(tokens):
-                textBuffer = tokens[index][1]
-                match = re.search(pattern, textBuffer, re.MULTILINE)            
-                if match != None:
-                    indexStart = match.start() #self.convert_index(textBuffer, match.start())
-                    indexEnd = match.end() #self.convert_index(textBuffer, match.end())
-                    
-                    newTokens = []
-                    start = textBuffer[:indexStart]
-                    if len(start) > 0:
-                        newTokens.append(('text', start))
-                    
-                    middle = fnFormat(textBuffer[indexStart:indexEnd])
-                    if len(middle) > 0:
-                        if tagName == 'a':
-                            title = match.group(1)
-                            url = match.group(2)
-                            newTokens.append((tagName, ''))
-                            newTokens.append(('title', title))
-                            newTokens.append(('url', url))
-                            newTokens.append(('/' + tagName, ''))
-                        elif tagName == 'img':
-                            alttext = match.group(1)
-                            url = match.group(2)
-                            if len(match.groups()) >= 3:
-                                title = match.group(3)
+                if (tokens[index][0] == 'text'):
+                    textBuffer = tokens[index][1]
+                    match = re.search(pattern, textBuffer, re.MULTILINE)            
+                    if match != None:
+                        indexStart = match.start() #self.convert_index(textBuffer, match.start())
+                        indexEnd = match.end() #self.convert_index(textBuffer, match.end())
+                        
+                        newTokens = []
+                        start = textBuffer[:indexStart]
+                        if len(start) > 0:
+                            newTokens.append(('text', start))
+                        
+                        middle = fnFormat(textBuffer[indexStart:indexEnd])
+                        if len(middle) > 0:
+                            if tagName == 'a':
+                                title = match.group(1)
+                                url = match.group(2)
+                                newTokens.append((tagName, ''))
+                                newTokens.append(('title', title))
+                                newTokens.append(('url', url))
+                                newTokens.append(('/' + tagName, ''))
+                            elif tagName == 'img':
+                                alttext = match.group(1)
+                                url = match.group(2)
+                                if len(match.groups()) >= 3:
+                                    title = match.group(3)
+                                else:
+                                    title = alttext
+                                newTokens.append((tagName, ''))
+                                newTokens.append(('alttext', alttext))
+                                newTokens.append(('url', url))
+                                newTokens.append(('title', title))
+                                newTokens.append(('/' + tagName, ''))
                             else:
-                                title = alttext
-                            newTokens.append((tagName, ''))
-                            newTokens.append(('alttext', alttext))
-                            newTokens.append(('url', url))
-                            newTokens.append(('title', title))
-                            newTokens.append(('/' + tagName, ''))
-                        else:
-                            newTokens.append((tagName, ''))
-                            newTokens.append(('text', middle))
-                            newTokens.append(('/' + tagName, ''))
-                    
-                    end = textBuffer[indexEnd:]
-                    if len(end) > 0:
-                        newTokens.append(('text', end))
-                    tokens = tokens[:index] + newTokens + tokens[index:]                
-                    tokens.pop(index + len(newTokens))
-                else:                    
+                                newTokens.append((tagName, ''))
+                                newTokens.append(('text', middle))
+                                newTokens.append(('/' + tagName, ''))
+                        
+                        end = textBuffer[indexEnd:]
+                        if len(end) > 0:
+                            newTokens.append(('text', end))
+                        tokens = tokens[:index] + newTokens + tokens[index:]                
+                        tokens.pop(index + len(newTokens))
+                    else:                    
+                        index += 1
+                else:
                     index += 1
         print(tokens)
         self.text['state'] = 'normal'
@@ -156,7 +161,14 @@ class Application(tk.Frame):
             elif tokenType == 'title':
                 title = tokenText
             elif tokenType == '/img':
-                img = tk.PhotoImage(file=os.path.join(path, url))
+                if url[0:4] == 'http':
+                    u = urllib.request.urlopen(url)
+                    raw_data = u.read()
+                    u.close()
+                    img = tk.PhotoImage(data=base64.encodebytes(raw_data))
+                else:
+                    img = tk.PhotoImage(file=os.path.join(path, url))
+                
                 self.images.append(img) # save a reference
                 self.text.image_create(tk.INSERT, image=img)
             elif tokenType == '/a':
