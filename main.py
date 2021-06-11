@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import scrolledtext
 from tkinter import filedialog
@@ -16,7 +17,8 @@ patterns = {
     , ("italic", R"_.+_", lambda s: s[1:-1])
     , ("italic", R"\*.+\*", lambda s: s[1:-1])
     , ("monospace", R"`.+`", lambda s: s[1:-1])
-    #, ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
+    , ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
+    , ("a", R"\[(?P<title>.+)\]\((?P<url>[^\"\)]+)\)", lambda s: s)
     }
 
 class Application(tk.Frame):    
@@ -31,6 +33,7 @@ class Application(tk.Frame):
         self.fontBold = Font(family='Helvetica', weight='bold')
         self.fontItalic = Font(family='Helvetica', slant='italic')
         self.fontMonospace = Font(family='Courier')
+        self.fontA = Font(underline=1)
         self.create_widgets()        
 
     def create_widgets(self):
@@ -75,13 +78,12 @@ class Application(tk.Frame):
             self.reformat(fileText)
 
     def reformat(self, buffer):
-        tokens = [('text', buffer)]
+        tokens = [('text', buffer)]        
         for patternRow in patterns:
             tagName = patternRow[0]
             pattern = patternRow[1]
             fnFormat = patternRow[2]            
             index = 0
-            tagCount = 0
             while index < len(tokens):
                 textBuffer = tokens[index][1]
                 match = re.search(pattern, textBuffer, re.MULTILINE)            
@@ -96,8 +98,25 @@ class Application(tk.Frame):
                     
                     middle = fnFormat(textBuffer[indexStart:indexEnd])
                     if len(middle) > 0:
-                        if tagName == 'img':
-                            pass #special processing for an image
+                        if tagName == 'a':
+                            title = match.group(1)
+                            url = match.group(2)
+                            newTokens.append((tagName, ''))
+                            newTokens.append(('title', title))
+                            newTokens.append(('url', url))
+                            newTokens.append(('/' + tagName, ''))
+                        elif tagName == 'img':
+                            alttext = match.group(1)
+                            url = match.group(2)
+                            if len(match.groups()) >= 3:
+                                title = match.group(3)
+                            else:
+                                title = alttext
+                            newTokens.append((tagName, ''))
+                            newTokens.append(('alttext', alttext))
+                            newTokens.append(('url', url))
+                            newTokens.append(('title', title))
+                            newTokens.append(('/' + tagName, ''))
                         else:
                             newTokens.append((tagName, ''))
                             newTokens.append(('text', middle))
@@ -115,12 +134,39 @@ class Application(tk.Frame):
         self.text.delete('1.0', tk.END)
         # self.text.insert(tk.INSERT, fileText)
         tags = []
+        self.images = []
+        countA = 0
         for token in tokens:            
             tokenType = token[0]
             tokenText = token[1]
 
             if tokenType == 'text':
                 self.text.insert(tk.INSERT, tokenText, tuple(tags))
+            elif tokenType == 'img':
+                alttext = ''
+                url = ''
+                title = ''
+            elif tokenType == 'a':
+                title = ''
+                url = ''
+            elif tokenType == 'alttext':
+                alttext = tokenText
+            elif tokenType == 'url':
+                url = tokenText
+            elif tokenType == 'title':
+                title = tokenText
+            elif tokenType == '/img':
+                img = tk.PhotoImage(file=os.path.join(path, url))
+                self.images.append(img) # save a reference
+                self.text.image_create(tk.INSERT, image=img)
+            elif tokenType == '/a':
+                countA += 1
+                tagName = 'a' + str(countA)
+                self.text.tag_config(tagName, font=self.fontA)
+                self.text.tag_bind(tagName, "<Enter>", lambda event : event.widget.configure(cursor="hand1"))
+                self.text.tag_bind(tagName, "<Leave>", lambda event : event.widget.configure(cursor=""))
+                self.text.tag_bind(tagName, "<Button-1>", lambda e, url=url, title=title: click(url, title))
+                self.text.insert(tk.INSERT, title, tuple(tags + [tagName]))
             else:
                 if tokenType[0] == '/':
                     tags.remove(tokenType[1:])
@@ -150,11 +196,15 @@ class Application(tk.Frame):
         return "0.0"
     
     def command_exit(self):
-        self.root.destroy();
+        self.root.destroy()
 
     def command_about(self):
         print('Not yet implemented')
 
+def click(url, title):
+    print(f"URL: {url}, TITLE: {title}")
+
+path = os.path.dirname(os.path.realpath(__file__))   
 root = tk.Tk()
 app = Application(root)
 app.mainloop()
