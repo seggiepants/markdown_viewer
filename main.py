@@ -1,6 +1,6 @@
 import os
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import PhotoImage, scrolledtext
 from tkinter import filedialog
 from tkinter.font import Font
 import urllib.request
@@ -11,6 +11,8 @@ patterns = [
     ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
     , ("a", R"\[(?P<title>.+)\]\((?P<url>[^\"\)]+)\)", lambda s: s)
     , ("url", R"\<.+\>", lambda s: s[1:-1]) # R"\<[a-zA-Z0-9\.\\~:\/\_]+\>"
+    , ("ul", R"^(?P<level> *)[\*+-]\s(?P<item>.*$)", lambda s: s)
+    , ("ol", R"^(?P<level> *)[0-9]+.?\s(?P<item>.*$)", lambda s: s)
     , ("h1", R"^.+\n=+$", lambda s: s.splitlines()[0])
     , ("h1", R"^# .+$", lambda s: s[2:])
     , ("h2", R"^.+\n-+$", lambda s: s.splitlines()[0])
@@ -19,6 +21,7 @@ patterns = [
     , ("h4", R"^#### .+$", lambda s: s[5:])
     , ("h5", R"^##### .+$", lambda s: s[6:])
     , ("h6", R"^###### .+$", lambda s: s[7:])
+    , ("hr", R"^\-\-[\-]+$", lambda s: s)
     , ("strike", R"~~.+~~", lambda s: s[2:-2])
     , ("bold", R"\*\*.+\*\*", lambda s: s[2:-2])
     , ("italic", R"_.+_", lambda s: s[1:-1])
@@ -132,11 +135,18 @@ class Application(tk.Frame):
                                 newTokens.append(('url', url))
                                 newTokens.append(('title', title))
                                 newTokens.append(('/' + tagName, ''))
+                            elif tagName == 'hr':
+                                newTokens.append(('hr', ''))
+                            elif tagName == 'ul' or tagName == 'ol':
+                                level = len(match.group(1))
+                                item = match.group(2)
+                                newTokens.append((tagName, level))
+                                newTokens.append(('text', item))
+                                newTokens.append(('/' + tagName, ''))
                             else:
                                 newTokens.append((tagName, ''))
                                 newTokens.append(('text', middle))
-                                newTokens.append(('/' + tagName, ''))
-                        
+                                newTokens.append(('/' + tagName, ''))                        
                         end = textBuffer[indexEnd:]
                         if len(end) > 0:
                             newTokens.append(('text', end))
@@ -153,6 +163,7 @@ class Application(tk.Frame):
         tags = []
         self.images = []
         countA = 0
+        indent = {}
         for token in tokens:            
             tokenType = token[0]
             tokenText = token[1]
@@ -183,6 +194,8 @@ class Application(tk.Frame):
                 
                 self.images.append(img) # save a reference
                 self.text.image_create(tk.INSERT, image=img)
+            elif tokenType == 'hr':                
+                self.text.insert(tk.INSERT, "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬" ,('hr')) 
             elif tokenType == '/a':
                 countA += 1
                 tagName = 'a' + str(countA)
@@ -193,11 +206,30 @@ class Application(tk.Frame):
                 if len(title) == 0:
                     title = url
                 self.text.insert(tk.INSERT, title, tuple(tags + [tagName]))
+            elif tokenType == 'ul' or tokenType == 'ol':
+                if lastToken != '/ul' and lastToken != '/ol' and lastToken != 'text': 
+                    # remove the text part later, seem to have a stray \n at then end of each one.
+                    indent = {}
+                level = tokenText # really a number
+                if tokenType == 'ol':                    
+                    if not level in indent:
+                        indent[level] = 1
+                    else:
+                        indent[level] = indent[level] + 1
+                    counter = indent[level]
+
+                tags.append(tokenType)
+                self.text.insert(tk.INSERT, " " * level, tuple(tags))
+                if tokenType == 'ul':
+                    self.text.insert(tk.INSERT, "● ", tuple(tags))
+                else: # ol
+                    self.text.insert(tk.INSERT, str(counter) + ". ", tuple(tags))
             else:
                 if tokenType[0] == '/':
                     tags.remove(tokenType[1:])
                 else:
                     tags.append(tokenType)
+            lastToken = tokenType
         self.text.tag_config('h1', font=self.fontH1)
         self.text.tag_config('h2', font=self.fontH2)
         self.text.tag_config('h3', font=self.fontH3)
