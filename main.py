@@ -7,20 +7,24 @@ import urllib.request
 import base64
 import re
 
-patterns = {
+patterns = [
     ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
     , ("a", R"\[(?P<title>.+)\]\((?P<url>[^\"\)]+)\)", lambda s: s)
+    , ("url", R"\<.+\>", lambda s: s[1:-1]) # R"\<[a-zA-Z0-9\.\\~:\/\_]+\>"
     , ("h1", R"^.+\n=+$", lambda s: s.splitlines()[0])
     , ("h1", R"^# .+$", lambda s: s[2:])
     , ("h2", R"^.+\n-+$", lambda s: s.splitlines()[0])
     , ("h2", R"^## .+$", lambda s: s[3:])
     , ("h3", R"^### .+$", lambda s: s[4:])
+    , ("h4", R"^#### .+$", lambda s: s[5:])
+    , ("h5", R"^##### .+$", lambda s: s[6:])
+    , ("h6", R"^###### .+$", lambda s: s[7:])
     , ("strike", R"~~.+~~", lambda s: s[2:-2])
     , ("bold", R"\*\*.+\*\*", lambda s: s[2:-2])
     , ("italic", R"_.+_", lambda s: s[1:-1])
     , ("italic", R"\*.+\*", lambda s: s[1:-1])
     , ("monospace", R"`.+`", lambda s: s[1:-1])
-    }
+]
 # ZZZ can I have a link like <url>?
 
 class Application(tk.Frame):    
@@ -31,6 +35,9 @@ class Application(tk.Frame):
         self.fontH1 = Font(family='Helvetica', size=36, weight='bold')
         self.fontH2 = Font(family='Helvetica', size=21, weight='bold')
         self.fontH3 = Font(family='Helvetica', size=18, weight='bold')
+        self.fontH4 = Font(family='Helvetica', size=16, weight='bold')
+        self.fontH5 = Font(family='Helvetica', size=14, weight='bold')
+        self.fontH6 = Font(family='Helvetica', size=12, weight='bold')
         self.fontStrike = Font(family='Helvetica', overstrike=1)
         self.fontBold = Font(family='Helvetica', weight='bold')
         self.fontItalic = Font(family='Helvetica', slant='italic')
@@ -108,6 +115,11 @@ class Application(tk.Frame):
                                 newTokens.append(('title', title))
                                 newTokens.append(('url', url))
                                 newTokens.append(('/' + tagName, ''))
+                            elif tagName == 'url':
+                                url = middle
+                                newTokens.append(('a', ''))
+                                newTokens.append(('url', middle))
+                                newTokens.append(('/a', ''))
                             elif tagName == 'img':
                                 alttext = match.group(1)
                                 url = match.group(2)
@@ -178,6 +190,8 @@ class Application(tk.Frame):
                 self.text.tag_bind(tagName, "<Enter>", lambda event : event.widget.configure(cursor="hand1"))
                 self.text.tag_bind(tagName, "<Leave>", lambda event : event.widget.configure(cursor=""))
                 self.text.tag_bind(tagName, "<Button-1>", lambda e, url=url, title=title: click(url, title))
+                if len(title) == 0:
+                    title = url
                 self.text.insert(tk.INSERT, title, tuple(tags + [tagName]))
             else:
                 if tokenType[0] == '/':
@@ -187,6 +201,9 @@ class Application(tk.Frame):
         self.text.tag_config('h1', font=self.fontH1)
         self.text.tag_config('h2', font=self.fontH2)
         self.text.tag_config('h3', font=self.fontH3)
+        self.text.tag_config('h4', font=self.fontH4)
+        self.text.tag_config('h5', font=self.fontH5)
+        self.text.tag_config('h6', font=self.fontH6)
         self.text.tag_config('strike', font=self.fontStrike)
         self.text.tag_config('bold', font=self.fontBold)
         self.text.tag_config('italic', font=self.fontItalic)
