@@ -11,8 +11,10 @@ patterns = [
     ("img", R"\!\[(?P<alttext>.+)\]\((?P<url>[^\"\)]+)(?P<title> \".+\")?\)", lambda s: s)
     , ("a", R"\[(?P<title>.+)\]\((?P<url>[^\"\)]+)\)", lambda s: s)
     , ("url", R"\<.+\>", lambda s: s[1:-1]) # R"\<[a-zA-Z0-9\.\\~:\/\_]+\>"
-    , ("ul", R"^(?P<level> *)[\*+-]\s(?P<item>.*$)", lambda s: s)
-    , ("ol", R"^(?P<level> *)[0-9]+.?\s(?P<item>.*$)", lambda s: s)
+    , ("br", R" [ ]+\n", lambda s: s)
+    , ("ul", R"\n(?P<level> *)[\*+-]\s(?P<item>.*$)", lambda s: s)
+    , ("ol", R"\n(?P<level> *)[0-9]+.?\s(?P<item>.*$)", lambda s: s)
+    , ("p", R"\n[\n]+", lambda s: s)
     , ("h1", R"^.+\n=+$", lambda s: s.splitlines()[0])
     , ("h1", R"^# .+$", lambda s: s[2:])
     , ("h2", R"^.+\n-+$", lambda s: s.splitlines()[0])
@@ -28,7 +30,10 @@ patterns = [
     , ("italic", R"\*.+\*", lambda s: s[1:-1])
     , ("monospace", R"`.+`", lambda s: s[1:-1])
 ]
-# ZZZ can I have a link like <url>?
+
+crlf_tags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br']
+whitespace = ' \n\r\t'
+inline_whitespace = ' \t'
 
 class Application(tk.Frame):    
     def __init__(self, root=None):
@@ -118,6 +123,8 @@ class Application(tk.Frame):
                                 newTokens.append(('title', title))
                                 newTokens.append(('url', url))
                                 newTokens.append(('/' + tagName, ''))
+                            elif tagName == 'br' or tagName == 'p':
+                                newTokens.append((tagName, ''))
                             elif tagName == 'url':
                                 url = middle
                                 newTokens.append(('a', ''))
@@ -169,7 +176,7 @@ class Application(tk.Frame):
             tokenText = token[1]
 
             if tokenType == 'text':
-                self.text.insert(tk.INSERT, tokenText, tuple(tags))
+                self.text.insert(tk.INSERT, self.normalize_text(tokenText), tuple(tags))
             elif tokenType == 'img':
                 alttext = ''
                 url = ''
@@ -196,6 +203,10 @@ class Application(tk.Frame):
                 self.text.image_create(tk.INSERT, image=img)
             elif tokenType == 'hr':                
                 self.text.insert(tk.INSERT, "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬" ,('hr')) 
+            elif tokenType == 'br':
+                self.text.insert(tk.INSERT, "\n", tags)                
+            elif tokenType == 'p':
+                self.text.insert(tk.INSERT, "\n\n", tags)                
             elif tokenType == '/a':
                 countA += 1
                 tagName = 'a' + str(countA)
@@ -207,8 +218,7 @@ class Application(tk.Frame):
                     title = url
                 self.text.insert(tk.INSERT, title, tuple(tags + [tagName]))
             elif tokenType == 'ul' or tokenType == 'ol':
-                if lastToken != '/ul' and lastToken != '/ol' and lastToken != 'text': 
-                    # remove the text part later, seem to have a stray \n at then end of each one.
+                if lastToken != '/ul' and lastToken != '/ol': 
                     indent = {}
                 level = tokenText # really a number
                 if tokenType == 'ol':                    
@@ -219,6 +229,7 @@ class Application(tk.Frame):
                     counter = indent[level]
 
                 tags.append(tokenType)
+                self.text.insert(tk.INSERT, "\n", tuple(tags))
                 self.text.insert(tk.INSERT, " " * level, tuple(tags))
                 if tokenType == 'ul':
                     self.text.insert(tk.INSERT, "● ", tuple(tags))
@@ -227,6 +238,8 @@ class Application(tk.Frame):
             else:
                 if tokenType[0] == '/':
                     tags.remove(tokenType[1:])
+                    if tokenType[1:] in crlf_tags:
+                        self.text.insert(tk.INSERT, '\n',)
                 else:
                     tags.append(tokenType)
             lastToken = tokenType
@@ -241,7 +254,25 @@ class Application(tk.Frame):
         self.text.tag_config('italic', font=self.fontItalic)
         self.text.tag_config('monospace', font=self.fontMonospace)
         self.text['state'] = 'disabled'
-        
+
+    def normalize_text(self, text):
+        leading = ''
+        trailing = ''
+        if len(text) >= 1:
+            if text[0] in inline_whitespace:
+                leading = ' '
+        if len(text) >= 2:
+            if text[-1] in inline_whitespace:
+                trailing = ' '
+        # replace carriage return, line feed and tabs with a space.
+        temp = text.replace('\n', ' ')
+        temp = temp.replace('\r', ' ')
+        temp = temp.replace('\t', ' ')
+        # get a list of words delimited by space
+        # eliminating redundant spaces
+        word = [word for word in temp.split(' ') if len(word) > 0]
+        return leading + ' '.join(word) + trailing
+    
     def convert_index(self, string, count):
         lines = string.splitlines()
         pos = 0
