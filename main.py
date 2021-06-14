@@ -85,7 +85,7 @@ class Application(tk.Frame):
         print('Hi there, everyone!')
 
     def command_dialog_open(self):
-        fileName = filedialog.askopenfilename(title='Open Markdown', filetype = (('Markdown', '*.md'), ('All Files', '*.*')))
+        fileName = filedialog.askopenfilename(title='Open Markdown', filetypes = [('Markdown', '*.md'), ('All Files', '*.*')])
         if (len(fileName) > 0):
             self.root.title(f"Markdown Viewer: {fileName}")
             file = open(fileName, 'r')
