@@ -38,7 +38,7 @@ class Application(tk.Frame):
     def command_dialog_open(self):
         fileName = filedialog.askopenfilename(title='Open Markdown', filetypes = [('Markdown', '*.md'), ('All Files', '*.*')])
         if (len(fileName) > 0):
-            self.root.title(f"Markdown Viewer: {fileName}")
+            self.root.title("Markdown Viewer: %s" % fileName)
             file = open(fileName, 'r')
             fileText = file.read()
             file.close()
@@ -51,8 +51,8 @@ class Application(tk.Frame):
     def command_about(self):
         print('Not yet implemented')
 
-    def click(url, title):
-        print(f"URL: {url}, TITLE: {title}")
+    def click(self, url, title):
+        print("URL: %s, TITLE: %s" % (url, title))
 
 path = os.path.dirname(os.path.realpath(__file__))   
 root = tk.Tk()
