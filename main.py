@@ -31,7 +31,7 @@ patterns = [
     , ("monospace", R"`.+`", lambda s: s[1:-1])
 ]
 
-crlf_tags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br']
+crlf_tags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
 whitespace = ' \n\r\t'
 inline_whitespace = ' \t'
 
